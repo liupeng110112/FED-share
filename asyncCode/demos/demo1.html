@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <script src="jquery-debug.js"></script>
+</head>
+<body>
+    <script>
+    $.ajax({
+        url: '1.json',
+        type:'get'
+    })
+    .done(succCallback)
+　　.fail(failCallback)
+    .always(function(){
+        alert('每次都执行')
+    })
+    function succCallback(){
+        alert('成功了')
+    }
+    function failCallback(){
+        alert('失败了')
+    }
+    </script>
+</body>
+</html>
