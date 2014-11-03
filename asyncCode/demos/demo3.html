@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <script src="jquery-debug.js"></script>
+</head>
+<body>
+    <script>
+
+    var dfd = $.Deferred() // 创建延迟对象
+    var wait = function(){
+        var task = function(){
+            alert('任务执行完成')
+            // 更新状态（从未完成变为完成）
+            dfd.resolve()
+            // dtd.reject(); 如果调用这个方法是将状态变成已失败
+        }
+        setTimeout(task,2000)
+        return dfd
+    }
+    $.when(wait())
+    .done(function(){
+        alert('任务执行完成的回调')
+    })
+    .fail(function(){
+        alert('任务执行失败的回调')
+    })
+    // 这里dfd是全局的，外部也能更新（一旦状态更新后就不会再更新了）
+    // dfd.resolve()
+    </script>
+</body>
+</html>
