@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <script src="jquery-debug.js"></script>
+</head>
+<body>
+    <script>
+    var wait = function(){
+        var task = function(){
+            alert('任务执行完成')
+        }
+        setTimeout(task,2000)
+    }
+    $.when(wait())
+    .done(function(){
+        alert('任务执行完成的回调')
+    })
+    </script>
+</body>
+</html>
