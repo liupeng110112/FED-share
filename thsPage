@@ -1,0 +1,231 @@
+/**
+* @author: liupeng
+* @date: 2015-05-19
+* @des: ajax page
+* @name: thsPage	
+*/
+
+;(function($){
+
+	// 构造函数
+	var thsPage = function(elem, options){
+		this.element = elem;
+		this.options = $.extend({},thsPage.DEFAULTS, options)
+
+		this.initialize.call(this);
+	}
+
+	// 版本号
+	thsPage.VERSION = '1.0.0';
+
+	/**
+	 * 分页默认配置参数
+	 * @showNum  
+	 * @isShowDefault 
+	 * @mask 
+	 */
+	thsPage.DEFAULTS = {
+		showNum: 4,
+		isShowDefault: false,
+		mask: null,
+		pageNums: 10, //每页显示数据 默认10条
+		curPage: 1 //	可以指定当前页
+	}
+
+	// 原型别名
+	var fn = thsPage.prototype;	
+
+	// 初始化
+	fn.initialize = function() {
+		var _self = this;
+
+		// 总数据
+		this._totalNum = 0;
+
+		// 总页数
+		this._totalPage = 0;
+
+		// 当前页
+		this._curpage = this.options.curPage || 1;
+
+		this.url = this.options.url + '?pageNum=' + this.options.pageNums;
+
+		var  dfd = this.requestData(this._curpage);
+
+		// 初始化分页控件显示
+		dfd.done(function(){
+			if(_self._totalNum > 0){
+				_self.pageViewShow(_self._curpage);
+				_self.handler();
+				_self.goToPage();
+			}else{
+				_self.elemment.html('');
+			}
+		})
+
+	}
+
+	// 请求数据并展现html
+	fn.requestData = function(curPage){
+
+		// 保存当前实例
+		var _self = this;
+
+		var url = decodeURIComponent(this.url),
+			curPage = curPage || 1;
+
+		if(url.indexOf('page') < 0){
+			if(url.indexOf('?') > 0){
+				url += '&page=' + curPage; 
+			}else{
+				url += '?page=' + curPage;
+			}
+		}else{
+			var _url = url.split('&page=');
+			url =  _url[0] + '&page=' + curPage + _url[1].replace(/^\d*/,'');
+		}	
+		
+		// 返回ajax对象
+		var dfd = $.ajax({
+			url: url,
+			type: 'get',
+			dataType: 'json',
+			success: function(data){
+
+				_self._totalNum = data.count;
+				_self._totalPage = data.pages;
+				_self.options.succFunc(data);
+			},
+			error: _self.options.errFunc
+		})	
+		
+		return dfd;
+	}
+
+	// 默认结构控制
+	fn.defaultHTML = function(){
+		return '共' + this._totalNum + '条&nbsp;到第<input class="enterPage">页&nbsp;<input type="button" class="goToPage btn" value="确定">';
+	}
+
+	fn.handler = function(){	
+		var _self = this;
+		this.element.on('click', 'a',function(){
+			
+			if(this.className == "prev"){
+				this._curpage--;
+			}else if(this.className == "next"){
+				this._curpage++;
+			}else{
+				// 这里出现过bug 火狐用innerText会获取不到值
+				this._curpage = +this.innerHTML;
+			}
+
+			_self.requestData(this._curpage);
+			
+			_self.pageViewShow(this._curpage);
+			_self.goToPage();
+		})
+	}
+	// 跳转指定页数
+	fn.goToPage = function(){
+
+		var goToBtn = this.element.find(".goToPage"),
+			goToInput = this.element.find(".enterPage");
+
+		goToBtn.on('click', $.proxy(function(){
+			
+			var _curPage = +(goToInput.val());
+
+			// 如果已经是当前页 不需要跳转
+			if(this._curpage == _curPage){
+				return;
+			}
+			this._curpage = _curPage;
+
+			// 如果输入的页数不在指定范围内，提示
+			if(_curPage < 1 || _curPage > this._totalPage || isNaN(_curPage)){
+				alert('请输入正确的页数');
+				return;
+			}
+
+			//更新数据视图
+			this.requestData(_curPage);
+
+			//更新分页视图
+			this.pageViewShow(_curPage);
+
+			this.goToPage();
+		},this))	
+	}
+
+	// 分页视图展现
+	fn.pageViewShow = function(curPage, isShowDefault){
+				
+		var str = '',
+			i = 1;
+		var _totalPage = +this._totalPage;	
+		if(curPage != 1){
+			str += '<a  class="prev">&lt;</a>';
+		}
+
+		var _showNum = this.options.showNum;
+
+		if(_totalPage <= (_showNum + 2)){
+			// 如果总页数不超过自己设定的显示数值时
+			for(;i <= _totalPage; i++){
+				if(i == curPage ){
+					str += '<strong>' + i +'</strong>';
+					continue;
+				}
+				str += '<a class="topage">' + i + '</a>';
+			}
+		}else if(_totalPage > (_showNum + 1)){
+			if((_totalPage - curPage) >= _showNum && curPage > 3){
+				str += '<a  class="topage">1</a>...';
+				for(i = curPage - 1;i < (_showNum + curPage - 1); i++){
+					if(i == curPage ){
+						str += '<strong>' + i +'</strong>';
+						continue;
+					}
+					str += '<a class="topage">' + i + '</a>';
+				}
+				str += '...<a class="topage">' + _totalPage + '</a>';
+			}else if(curPage > 3){
+				str += '<a  class="topage">1</a>...';
+				for(i = _totalPage - _showNum ; i <= _totalPage; i++){
+					if(i == curPage ){
+						str += '<strong>' + i +'</strong>';
+						continue;
+					}
+					str += '<a class="topage">' + i + '</a>';
+				}
+			}else{
+				for(;i < (_showNum + 1); i++){
+					if(i == curPage ){
+						str += '<strong>' + i +'</strong>';
+						continue;
+					}
+					str += '<a class="topage">' + i + '</a>';
+				}
+				str += '...<a class="topage">' + _totalPage + '</a>';
+			}
+		}
+		if(curPage != _totalPage){
+			str += '<a  class="next">&gt;</a>';
+		}
+
+		this.options.isShowDefault && (str += this.defaultHTML());
+		this.element.html(str);
+	}
+
+	$.fn.thsPage = function(options){
+
+		new thsPage(this,options);
+	}
+
+	if(typeof define == "function" && define.cmd){
+		define(function(){
+			return $.fn.thsPage;
+		})
+	}
+})(jQuery)
