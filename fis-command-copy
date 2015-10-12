@@ -1,0 +1,231 @@
+/*
+ * fis
+ * http://fis.baidu.com/
+ */
+
+'use strict';
+
+exports.name = 'copy';
+exports.desc = 'copy static resources to specify directory';
+exports.register = function(commander) {
+
+    commander
+        .action(function() {
+
+            /**
+             * 1.首先复制源代码 （主要包括tpl js css）
+             * 2.然后再修改tpl中的资源应用路径
+             * 3.建议发布完成之后就把对应的目录清掉
+             */
+            var fs = require('fs'),
+                path = require('path')
+
+                //设置全局变量(分别对应三种资源)
+                global.isUpdatePath = {
+                    'js': true,
+                    'css': true,
+                    'tpl': true
+                }
+
+            var pathList = JSON.parse(fs.readFileSync('config.json', 'utf-8'));
+
+            var cssPath, jsPath, cssExculde, jsExculde, tplPath, destDir;
+                cssPath = pathList.cssPath,
+                jsPath = pathList.jsPath,
+                tplPath = pathList.tplPath,
+                cssExculde = pathList.exculdeCss,
+                jsExculde = pathList.exculdeJs,
+
+                destDir = pathList.destDir
+
+                cssPath && copyFiles(cssPath, destDir)
+                jsPath && copyFiles(jsPath, destDir)
+                tplPath && copyFiles(tplPath, destDir)
+
+            /*
+             * 修改tpl目录下的tpl资源引用路径
+             */
+
+            var scriptReg = /<script(?:.*?)src=[\"\'](.+?)[\"\'](?!<)(?:.*)\>(?:[\n\r\s]*?)(?:<\/script>)*/gm,
+                linkReg = /<link(?:.*?)href=[\"\'](.+?)[\"\'](?!<)(?:.*)\>(?:[\n\r\s]*?)(?:<\/link>)*/gm;
+
+            var tpl = path.resolve(destDir + '\\tpl')
+
+            // 这里需要延时下
+            setTimeout(function() {
+                updateStaticSrc(tpl)
+            }, 100)
+
+
+            // 改变tpl中的src路径
+
+            function updateStaticSrc(tplPath) {
+
+                if (fs.existsSync(tplPath)) {
+                    fs.readdirSync(tplPath).forEach(function(file) {
+
+                        var filePath = path.join(tplPath, file)
+
+                        if (fs.statSync(filePath).isDirectory()) {
+
+                            updateStaticSrc(filePath)
+
+                        } else { //如果是文件就读取文件内容，找出link和script标签的src并进行替换
+
+                            var input = fs.createReadStream(filePath);
+
+                            readLines(input, function(content, code) {
+                                // 替换link标签的src
+                                if (cssPath) {
+                                    if (!content.match(/<!--(?:.*?)<link/g) && content.match(linkReg)) {
+
+                                        var match = /<link(?:.*?)href=[\"\'](.+?)[\"\'](?!<)(?:.*)\>(?:[\n\r\s]*?)(?:<\/link>)*/gm.exec(content),
+                                            src = match[1],
+                                            updateSrc = '';
+                                        // console.log(src)    
+                                        src.replace(/\/thsft\/css\/(.*?)\/(.*)/, function($, $0, $1) {
+                                            // 如果设置的是路径而不是目录需要判断下
+                                            if (cssPath.indexOf('.css') > 0 && cssPath.indexOf($1) < 0) {
+                                                return;
+                                            };
+                                            
+                                            updateSrc = '/css/' + $1
+
+                                        });
+                                        if (updateSrc) {
+                                            content = content.replace(src, updateSrc);
+                                            
+                                        }
+                                    }
+                                    
+                                }
+                                // 替换script标签的src
+                                if (jsPath) {
+                                    if (!content.match(/<!--(?:.*?)<script/g) && content.match(scriptReg)) {
+
+                                        var match = /<script(?:.*?)src=[\"\'](.+?)[\"\'](?!<)(?:.*)\>(?:[\n\r\s]*?)(?:<\/script>)*/gm.exec(content),
+                                            src = match[1],
+                                            updateSrc = '';
+                                        // 不需要替换指定的文件
+                                        // 判断是否需要进行src的替换，以下几种情况不替换
+                                        // jquery.xx.xx
+                                        // xx.min.xx
+                                        // libs或者lib下面的模块
+                                        // 其他模块下的js
+                                        var noRepalce = src.indexOf('jquery') > 0 || src.indexOf('libs') > 0 || src.indexOf('min') > 0;
+
+                                        if (src.indexOf(jsExculde) > -1 || noRepalce) {
+
+                                            code.push(content);
+                                            return false;
+                                        }
+
+                                        src.replace(/\/thsft\/js\/(.*?)\/(.*)/, function($, $0, $1) {
+
+                                            // 如果设置的是路径而不是目录需要判断下
+                                            if (jsPath.indexOf('.js') > -1 && jsPath.indexOf($1) < 0) {
+                                                return
+                                            };
+
+                                            updateSrc = '/js/' + $1
+
+                                        });
+
+                                        if (updateSrc) {
+                                            content = content.replace(src, updateSrc)
+                                            
+                                        }
+                                    }
+                                    code.push(content);
+                                    fs.writeFile(filePath, code.join('\n'), 'utf-8');
+
+                                }
+                            })
+                        }
+                    })
+                }
+            }
+
+            // 复制文件
+
+            function copyFiles(sourceDir, destDir) {
+                // 首先对路径进行解析
+                var sourceDir = sourceDir.replace(/\//g, '\/')
+                // 然后判断这个路径是否存在
+                sourceDir = fs.existsSync(sourceDir) ? sourceDir : false
+
+                // 针对不同的静态资源放到不同的目录下
+                if (sourceDir.indexOf('css') > 0) {
+                    global.isUpdatePath.css && (destDir = destDir + '/css', global.isUpdatePath.css = false)
+                }
+                if (sourceDir.indexOf('js') > 0) {
+                    global.isUpdatePath.js && (destDir = destDir + '/js', global.isUpdatePath.js = false)
+                }
+                if (sourceDir.indexOf('Zend') > 0) {
+                    global.isUpdatePath.tpl && (destDir = destDir + '/tpl', global.isUpdatePath.tpl = false)
+                }
+
+                // 创建相应的目录
+                if (!fs.existsSync(destDir)) {
+                    fs.mkdirSync(destDir)
+                }
+                if (sourceDir) {
+                    if (!fs.statSync(sourceDir).isDirectory()) { //如果是文件路径
+                        var destname = path.join(destDir, path.basename(sourceDir))
+                        fs.createReadStream(sourceDir).pipe(fs.createWriteStream(destname))
+                    } else {
+                        fs.readdirSync(sourceDir).forEach(function(file) {
+                            // file参数表示的是文件名（包括文件或者目录）
+                            var sourcePathname = path.join(sourceDir, file),
+                                destPathname = path.join(destDir, file)
+                                // 判断是目录还是文件
+                                // 如果是目录,则执行递归
+                                if (fs.statSync(sourcePathname).isDirectory()) {
+                                    // 注意的一点是复制文件之前要确保文件目录存在，否则会报错
+                                    if (!fs.existsSync(destPathname)) {
+                                        fs.mkdirSync(destPathname)
+                                    }
+                                    // 进行递归
+                                    copyFiles(sourcePathname, destPathname)
+                                } else {
+                                    // 如果代码中有被压缩过的css则忽略掉
+                                    var pathExtension = path.extname(sourcePathname)
+                                    if (pathExtension == '.css' && (sourcePathname.indexOf('min') > 0)) {
+                                        return
+                                    }
+                                    // 复制文件到指定的目录下
+                                    var isCompleted = fs.createReadStream(sourcePathname).pipe(fs.createWriteStream(destPathname))
+                                    // if(isCompleted){
+                                    //  console.log(sourcePathname + ':复制成功')
+                                    // }
+                                }
+                        })
+                    }
+                }
+            }
+
+            // 逐行读取
+            function readLines(input, func) {
+                var remaining = '';
+                var code = [];
+                input.on('data', function(data) {
+                    remaining += data;
+                    var index = remaining.indexOf('\n');
+
+                    while (index > -1) {
+                        var line = remaining.substring(0, index);
+                        remaining = remaining.substring(index + 1);
+                        func(line, code);
+                        index = remaining.indexOf('\n');
+                    }
+                })
+
+                input.on('end', function() {
+                    if (remaining.length > 0) {
+                        func(remaining, code)
+                    }
+
+                })
+            }
+        });
+};
