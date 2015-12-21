@@ -1,0 +1,30 @@
+var MyQuery = function(selector){
+    if ( window == this ) return new MyQuery(selector);
+    //这里只实现dom类型的简单查找,嘿嘿
+    var doms = document.getElementsByTagName(selector);
+    var arr = [];
+    for(var i=0; i<doms .length; i++){
+        arr.push(doms.item(i));
+    }
+    return this.setArray(arr);
+}
+MyQuery.prototype.setArray = function( arr ) {
+        this.length = 0;
+        [].push.apply( this, arr );
+        return this;
+}
+MyQuery.fn = MyQuery.prototype;
+var $ = MyQuery;
+
+//插件扩展1)each
+MyQuery.fn.each = function(method){
+    for(var i=0,l=this.length; i<l; i++){
+        method.call(this[i],i);
+    }
+}
+//插件扩展2)show
+MyQuery.fn.show = function(){
+    this.each(function(i){
+        alert(i+“:“+this.id+“:“+this.innerHTML);
+    });
+}
